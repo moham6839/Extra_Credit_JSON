@@ -1,0 +1,230 @@
+---
+title: "Nobel Prize Exploration"
+author: "Mohamed Hassan-El Serafi"
+date: "2023-03-27"
+output: html_document
+---
+
+
+Working with the two JSON files available through the API at nobelprize.org, ask and answer 4 interesting questions.
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message=FALSE, warning = FALSE)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(RCurl)
+library(rjson)
+library(data.table)
+library(httr)
+library(reshape2)
+library(htmlwidgets)
+library(kableExtra)
+```
+
+
+
+## Nobel Prize API
+
+
+```{r}
+prize_url <- "https://raw.githubusercontent.com/moham6839/Extra_Credit_JSON/main/Nobel_Prize.json"
+
+prize_json_df <- jsonlite::fromJSON(prize_url) 
+new_prize_df <- prize_json_df$prizes
+prize_df <- as.data.frame(new_prize_df)
+DT::datatable(prize_df, filter="top")
+```
+
+
+
+
+
+```{r}
+new_prize_df <- unnest(prize_df)
+```
+
+
+
+
+
+```{r}
+  kbl(head(new_prize_df, n = 10)) %>%
+  kable_styling(latex_options="scale_down", c("striped", "hover", "condensed", full_width=F))
+```
+
+
+
+
+# Nobel Laureates API
+
+
+```{r}
+laureate_url <- "https://raw.githubusercontent.com/moham6839/Extra_Credit_JSON/main/Nobel_Laureate.json"
+laureate_json_df <- jsonlite::fromJSON(laureate_url) 
+new_laureate_df <- laureate_json_df$laureates
+laureate_df <- as.data.frame(new_laureate_df)
+DT::datatable(laureate_df, filter="top")
+```
+
+```{r}
+colnames(laureate_df)
+```
+
+
+
+
+
+```{r}
+new_laureate_df <- unnest(laureate_df)
+new_laureate_df2 <- unnest_wider(new_laureate_df, `affiliations`, names_sep = "_")
+```
+
+
+```{r}
+  kbl(head(new_laureate_df2, n = 10)) %>%
+  kable_styling(latex_options="scale_down", c("striped", "hover", "condensed", full_width=F))
+```
+
+
+
+
+
+
+
+1. Which country has the most Nobel Laureates?
+
+
+```{r}
+most_laureates <- new_laureate_df2 %>%
+  filter(!is.na(bornCountry)) %>%
+  group_by(bornCountry) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+```
+
+
+```{r}
+pct_most_laureates <- most_laureates %>%
+  mutate(pct_breakdown = 100 * (most_laureates$count / nrow(new_laureate_df2))) %>%
+  top_n(20) %>%
+  arrange(desc(pct_breakdown))
+pct_most_laureates
+```
+
+```{r}
+ggplot(pct_most_laureates, aes(x=reorder(bornCountry, -pct_breakdown), y=pct_breakdown)) +
+  geom_bar(stat="identity", position="dodge") +
+  coord_flip()
+```
+
+Close to 30% of all Nobel Laureates were born in the U.S., followed by Great Britain and Germany.
+
+
+2. What is the percentage of Nobel Laureates that are still alive?
+
+```{r}
+still_alive <- new_laureate_df2 %>%
+  filter(died == "0000-00-00") %>%
+  group_by(died) %>%
+  summarise(count=n()) %>%
+  arrange(desc(died))
+still_alive
+```
+
+
+
+```{r}
+pct_still_alive <- (still_alive$count / nrow(new_laureate_df2)) * 100
+pct_still_alive
+```
+
+Approximately 33% of Nobel Laureates are still alive.
+
+
+
+
+3. Which category has the most female Nobel Laureates winners?
+
+```{r}
+category_breakdown <- new_laureate_df2 %>%
+  filter(gender == "female") %>%
+  group_by(category) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+category_breakdown
+```
+
+
+
+
+
+```{r}
+category_breakdown %>%
+ggplot(aes(x = reorder(category, -count), y=count)) +
+  geom_bar(stat='identity', position='dodge', width=0.5) +
+  labs(title = "Female Nobel Laureates",
+       y="Number of Female Nobel Laureates",
+       x="Category")
+```
+
+The category that has the most female Nobel Laureates is Peace, followed by Literature and Medicine.
+
+
+
+4. What is the percentage of the Nobel Prize awards that had shared winners?
+
+
+
+```{r}
+shared_prize <- new_prize_df %>%
+  count(share) 
+shared_prize
+```
+
+
+```{r}
+shared_prizes2 <- shared_prize %>%
+  mutate(pct_shared = 100 * (shared_prize$n / nrow(new_prize_df))) %>%
+  arrange(desc(pct_shared))
+shared_prizes2
+```
+
+
+
+
+```{r}
+shared_prizes2 %>%
+ggplot(aes(x = reorder(share, -pct_shared), y=pct_shared)) +
+  geom_bar(stat='identity', position='dodge', width=0.5) +
+  labs(title = "Nobel Prizes Winners",
+       y="Percentage Breakdown",
+       x="Number of Times Shared")
+```
+
+
+
+
+```{r}
+shared_breakdown <- new_prize_df %>%
+  summarise(single = sum(share == 1),
+            multiple = sum(share > 1))
+shared_breakdown
+```
+
+
+```{r}
+pct_shared_winners <- (shared_breakdown$multiple / sum(shared_breakdown)) * 100
+pct_shared_winners
+```
+
+
+Approximately 64% of all Nobel Prizes were shared by at least 2 or more people. 
+
+
+
